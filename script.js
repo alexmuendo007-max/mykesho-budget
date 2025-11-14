@@ -8,7 +8,6 @@ const quotes = [
   { text: "Every shilling saved is a shilling earned.", author: "Kenyan Proverb" },
   { text: "Do not save what is left after spending; spend what is left after saving.", author: "Warren Buffett" }
 ];
-
 let currentQuote = 0;
 
 // Load & Save
@@ -52,20 +51,16 @@ function render() {
 function showOnboarding() {
   $('onboarding').classList.remove('hidden');
   $('dashboard').classList.add('hidden');
-
-  const startBtn = $('startBtn');
-  if (startBtn) {
-    startBtn.onclick = () => {
-      const income = parseFloat($('incomeInput').value);
-      if (income > 0) {
-        state.income = income;
-        applyBudgetRules();
-        saveData();
-        render();
-        showQuote();
-      }
-    };
-  }
+  $('startBtn').onclick = () => {
+    const income = parseFloat($('incomeInput').value);
+    if (income > 0) {
+      state.income = income;
+      applyBudgetRules();
+      saveData();
+      render();
+      showQuote();
+    }
+  };
 }
 
 // === DASHBOARD ===
@@ -83,13 +78,19 @@ function showDashboard() {
   $('progressBar').style.width = percent + '%';
   $('progressLabel').textContent = Math.round(percent) + '%';
 
+  renderCategorySummary();
+  renderExpensesList();
+
+  setupDashboardButtons();
+}
+
+function renderCategorySummary() {
   const list = $('categoryList');
   list.innerHTML = '';
   state.categories.forEach(cat => {
     const card = document.createElement('div');
     card.className = 'category-card';
     if (cat.spent > cat.budget) card.classList.add('over-budget');
-
     const catPercent = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
 
     card.innerHTML = `
@@ -103,68 +104,142 @@ function showDashboard() {
     `;
     list.appendChild(card);
   });
-
-  setupDashboardButtons();
 }
 
-// === DASHBOARD BUTTONS ===
-function setupDashboardButtons() {
-  const addBtn = $('addExpenseBtn');
-  const editBtn = $('editBudgetBtn');
-  const mpesaBtn = $('mpesaBtn');
-  const pdfBtn = $('exportPdfBtn');
+function renderExpensesList() {
+  const list = $('expensesList');
+  list.innerHTML = '<div style="padding:0.8rem 1rem; font-weight:600; color:#006400;">Recent Expenses</div>';
+  const allTx = [];
+  state.categories.forEach(cat => {
+    cat.transactions.forEach(tx => {
+      allTx.push({ ...tx, category: cat.name });
+    });
+  });
+  allTx.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  if (addBtn) addBtn.onclick = openAddModal;
-  if (editBtn) editBtn.onclick = openEditModal;
-  if (mpesaBtn) mpesaBtn.onclick = openMpesaModal;
-  if (pdfBtn) pdfBtn.onclick = exportToPDF;
+  if (allTx.length === 0) {
+    list.innerHTML += '<div style="padding:1rem; text-align:center; color:#888;">No expenses yet.</div>';
+    return;
+  }
+
+  allTx.forEach((tx, idx) => {
+    const item = document.createElement('div');
+    item.className = 'expense-item';
+    item.innerHTML = `
+      <div class="expense-details">
+        <div>${tx.category} • ${new Date(tx.date).toLocaleDateString('en-GB')}</div>
+        <div class="expense-amount">${formatKSh(tx.amount)}</div>
+        ${tx.note ? `<div class="expense-note">${tx.note}</div>` : ''}
+      </div>
+      <div class="expense-actions">
+        <button class="edit-expense" data-idx="${idx}" title="Edit">Edit</button>
+        <button class="delete-btn" data-idx="${idx}" title="Delete">Delete</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  // Attach event listeners
+  list.querySelectorAll('.edit-expense').forEach(btn => {
+    btn.onclick = () => editExpense(parseInt(btn.dataset.idx), allTx);
+  });
+  list.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.onclick = () => deleteExpense(parseInt(btn.dataset.idx), allTx);
+  });
 }
 
-// === ADD EXPENSE MODAL ===
-function openAddModal() {
+function editExpense(globalIdx, allTx) {
+  const tx = allTx[globalIdx];
+  if (!confirm(`Edit expense of ${formatKSh(tx.amount)} on ${tx.date}?`)) return;
+
+  openAddModal(tx, globalIdx);
+}
+
+function deleteExpense(globalIdx, allTx) {
+  const tx = allTx[globalIdx];
+  if (!confirm(`Delete expense of ${formatKSh(tx.amount)} from ${tx.category}?`)) return;
+
+  const cat = state.categories.find(c => c.name === tx.category);
+  if (cat) {
+    cat.transactions = cat.transactions.filter(t => 
+      !(t.amount === tx.amount && t.date === tx.date && t.note === tx.note)
+    );
+    cat.spent -= tx.amount;
+    saveData();
+    render();
+    showQuote();
+  }
+}
+
+// === MODAL: ADD/EDIT EXPENSE ===
+let editingExpense = null;
+
+function openAddModal(expense = null, globalIdx = null) {
+  editingExpense = expense ? { ...expense, globalIdx } : null;
   const modal = $('addModal');
+  const title = $('modalTitle');
+  title.textContent = editingExpense ? 'Edit Expense' : 'Add Expense';
+
   modal.classList.remove('hidden');
-  $('amountInput').focus();
-  $('amountInput').value = '';
-  $('noteInput').value = '';
-  $('dateInput').value = new Date().toISOString().split('T')[0];
+  $('amountInput').value = editingExpense?.amount || '';
+  $('noteInput').value = editingExpense?.note || '';
+  $('dateInput').value = editingExpense?.date || new Date().toISOString().split('T')[0];
 
   const select = $('categorySelect');
   select.innerHTML = '';
   state.categories.forEach(cat => {
     const opt = new Option(cat.name, cat.name);
+    if (editingExpense && cat.name === editingExpense.category) opt.selected = true;
     select.add(opt);
   });
 
-  const cancelBtn = $('cancelBtn');
-  const saveBtn = $('saveBtn');
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    editingExpense = null;
+  };
 
-  const closeModal = () => modal.classList.add('hidden');
+  $('cancelBtn').onclick = closeModal;
+  $('saveBtn').onclick = () => {
+    const amount = parseFloat($('amountInput').value);
+    const category = $('categorySelect').value;
+    const date = $('dateInput').value;
+    const note = $('noteInput').value;
 
-  if (cancelBtn) cancelBtn.onclick = closeModal;
-  if (saveBtn) {
-    saveBtn.onclick = () => {
-      const amount = parseFloat($('amountInput').value);
-      const category = $('categorySelect').value;
-      const date = $('dateInput').value;
-      const note = $('noteInput').value;
-
-      if (amount > 0 && category) {
-        const cat = state.categories.find(c => c.name === category);
-        if (cat) {
-          cat.spent += amount;
-          cat.transactions.push({ amount, date, note });
-          saveData();
-          render();
-          closeModal();
-          showQuote();
+    if (amount > 0 && category) {
+      if (editingExpense) {
+        // Remove old
+        const oldCat = state.categories.find(c => c.name === editingExpense.category);
+        if (oldCat) {
+          oldCat.spent -= editingExpense.amount;
+          oldCat.transactions = oldCat.transactions.filter(t =>
+            !(t.amount === editingExpense.amount && t.date === editingExpense.date && t.note === editingExpense.note)
+          );
         }
       }
-    };
-  }
+
+      // Add new
+      const cat = state.categories.find(c => c.name === category);
+      if (cat) {
+        cat.spent += amount;
+        cat.transactions.push({ amount, date, note });
+      }
+
+      saveData();
+      render();
+      closeModal();
+      showQuote();
+    }
+  };
 }
 
-// === EDIT BUDGET MODAL ===
+// === REST OF FUNCTIONS (unchanged) ===
+function setupDashboardButtons() {
+  $('addExpenseBtn').onclick = () => openAddModal();
+  $('editBudgetBtn').onclick = openEditModal;
+  $('mpesaBtn').onclick = openMpesaModal;
+  $('exportPdfBtn').onclick = exportToPDF;
+}
+
 function openEditModal() {
   const modal = $('editModal');
   modal.classList.remove('hidden');
@@ -182,40 +257,32 @@ function openEditModal() {
     container.appendChild(div);
   });
 
-  const saveBtn = $('saveBudget');
-  const resetBtn = $('resetDefault');
-
   const closeModal = () => modal.classList.add('hidden');
 
-  if (saveBtn) {
-    saveBtn.onclick = () => {
-      const newIncome = parseFloat($('editIncome').value);
-      if (newIncome > 0) {
-        state.income = newIncome;
-        container.querySelectorAll('input').forEach(inp => {
-          const name = inp.dataset.name;
-          const budget = parseFloat(inp.value) || 0;
-          const cat = state.categories.find(c => c.name === name);
-          if (cat) cat.budget = budget;
-        });
-        saveData();
-        render();
-        closeModal();
-      }
-    };
-  }
-
-  if (resetBtn) {
-    resetBtn.onclick = () => {
-      state.income = parseFloat($('editIncome').value) || state.income;
-      applyBudgetRules();
+  $('saveBudget').onclick = () => {
+    const newIncome = parseFloat($('editIncome').value);
+    if (newIncome > 0) {
+      state.income = newIncome;
+      container.querySelectorAll('input').forEach(inp => {
+        const name = inp.dataset.name;
+        const budget = parseFloat(inp.value) || 0;
+        const cat = state.categories.find(c => c.name === name);
+        if (cat) cat.budget = budget;
+      });
       saveData();
-      openEditModal();
-    };
-  }
+      render();
+      closeModal();
+    }
+  };
+
+  $('resetDefault').onclick = () => {
+    state.income = parseFloat($('editIncome').value) || state.income;
+    applyBudgetRules();
+    saveData();
+    openEditModal();
+  };
 }
 
-// === M-PESA IMPORT ===
 function parseMpesaSMS(text) {
   const patterns = {
     amount: /Ksh([\d,]+\.?\d*)/i,
@@ -263,12 +330,8 @@ function openMpesaModal() {
   $('parsedPreview').classList.add('hidden');
   $('mpesaSave').classList.add('hidden');
 
-  const cancelBtn = $('mpesaCancel');
-  const saveBtn = $('mpesaSave');
-
   const closeModal = () => modal.classList.add('hidden');
-
-  if (cancelBtn) cancelBtn.onclick = closeModal;
+  $('mpesaCancel').onclick = closeModal;
 
   $('smsInput').oninput = () => {
     const sms = $('smsInput').value.trim();
@@ -283,19 +346,17 @@ function openMpesaModal() {
       preview.classList.remove('hidden');
       $('mpesaSave').classList.remove('hidden');
 
-      if (saveBtn) {
-        saveBtn.onclick = () => {
-          const cat = state.categories.find(c => c.name === parsed.category);
-          if (cat) {
-            cat.spent += parsed.amount;
-            cat.transactions.push({ amount: parsed.amount, date: parsed.date, note: `M-Pesa to ${parsed.payee}` });
-            saveData();
-            render();
-            closeModal();
-            showQuote();
-          }
-        };
-      }
+      $('mpesaSave').onclick = () => {
+        const cat = state.categories.find(c => c.name === parsed.category);
+        if (cat) {
+          cat.spent += parsed.amount;
+          cat.transactions.push({ amount: parsed.amount, date: parsed.date, note: `M-Pesa to ${parsed.payee}` });
+          saveData();
+          render();
+          closeModal();
+          showQuote();
+        }
+      };
     } else {
       preview.classList.add('hidden');
       $('mpesaSave').classList.add('hidden');
@@ -303,7 +364,6 @@ function openMpesaModal() {
   };
 }
 
-// === PDF EXPORT ===
 function exportToPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -367,7 +427,6 @@ function exportToPDF() {
   doc.save(`MyKesho-${monthName.replace(" ", "-")}.pdf`);
 }
 
-// === BUDGET RULES === (FIXED)
 function applyBudgetRules() {
   const needs = state.income * 0.5;
   const wants = state.income * 0.3;
@@ -376,16 +435,15 @@ function applyBudgetRules() {
 
   const needsCats = state.categories.filter(c => c.group === 'needs');
   const wantsCats = state.categories.filter(c => c.group === 'wants');
-  const savingsCats = state.categories.filter(c => c.group === 'savings');  // FIXED
+  const savingsCats = state.categories.filter(c => c.group === 'savings');
   const bufferCats = state.categories.filter(c => c.group === 'buffer');
 
-  needsCats.forEach((c, i) => c.budget = Math.round(needs / needsCats.length));
-  wantsCats.forEach((c, i) => c.budget = Math.round(wants / wantsCats.length));
-  savingsCats.forEach((c, i) => c.budget = Math.round(savings / savingsCats.length));  // FIXED
-  bufferCats.forEach((c, i) => c.budget = Math.round(buffer / bufferCats.length));
+  needsCats.forEach(c => c.budget = Math.round(needs / needsCats.length));
+  wantsCats.forEach(c => c.budget = Math.round(wants / wantsCats.length));
+  savingsCats.forEach(c => c.budget = Math.round(savings / savingsCats.length));
+  bufferCats.forEach(c => c.budget = Math.round(buffer / bufferCats.length));
 }
 
-// === UTILS ===
 function formatKSh(amount) {
   return 'KSh ' + Math.round(amount).toLocaleString();
 }
@@ -398,23 +456,19 @@ function getIcon(name) {
   return icons[name.split(' ')[0]] || 'Money';
 }
 
-// === QUOTE SYSTEM ===
 function showQuote() {
   const quote = quotes[currentQuote];
   $('quoteText').textContent = quote.text;
   $('quoteAuthor').textContent = `— ${quote.author}`;
-  const el = $('quote');
-  el.classList.remove('show');
-  setTimeout(() => el.classList.add('show'), 100);
   currentQuote = (currentQuote + 1) % quotes.length;
 }
 
-// === PWA ===
+// PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js');
   });
 }
 
-// === INIT ===
+// Init
 loadData();
