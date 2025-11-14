@@ -248,6 +248,74 @@ header h1 {
   color: #333;
 }
 
+/* === EXPENSES LIST === */
+.expenses-list {
+  margin-bottom: 1.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.expense-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.95rem;
+}
+
+.expense-item:last-child {
+  border-bottom: none;
+}
+
+.expense-details {
+  flex: 1;
+}
+
+.expense-amount {
+  font-weight: 700;
+  color: #006400;
+}
+
+.expense-note {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.2rem;
+}
+
+.expense-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.expense-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.expense-actions button:hover {
+  background: #eee;
+}
+
+.expense-actions .edit-expense svg {
+  width: 1.1em;
+  height: 1.1em;
+  fill: #006400;
+}
+
+.expense-actions .delete-btn svg {
+  width: 1.1em;
+  height: 1.1em;
+  fill: #dc3545;
+}
+
 /* Category Grid */
 .category-grid {
   display: grid;
@@ -326,7 +394,7 @@ header h1 {
   box-shadow: 0 12px 32px rgba(0,100,0,0.4);
 }
 
-/* === MODAL FIX === */
+/* === MODAL === */
 .modal {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -416,7 +484,7 @@ header h1 {
   font-size: 0.95rem;
 }
 
-/* Quote */
+/* === QUOTE (ALWAYS VISIBLE) === */
 .quote {
   position: fixed;
   bottom: 1rem;
@@ -425,18 +493,13 @@ header h1 {
   color: white;
   padding: 1rem 1.5rem;
   border-radius: 16px;
-  max-width: 300px;
+  max-width: 320px;
   font-size: 0.9rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-  opacity: 0;
-  transform: translateY(20px);
-  transition: all 0.5s ease;
   z-index: 50;
-}
-
-.quote.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
+  transition: opacity 0.5s ease;
 }
 
 #quoteAuthor {
