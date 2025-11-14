@@ -13,18 +13,11 @@ let currentQuote = 0;
 // Load & Save
 function loadData() {
   const saved = localStorage.getItem('mykesho');
-  if (saved) {
-    state = JSON.parse(saved);
-  } else {
-    initCategories();
-  }
-  render();
-  showQuote();
+  if (saved) state = JSON.parse(saved);
+  else initCategories();
+  render(); showQuote();
 }
-
-function saveData() {
-  localStorage.setItem('mykesho', JSON.stringify(state));
-}
+function saveData() { localStorage.setItem('mykesho', JSON.stringify(state)); }
 
 function initCategories() {
   state.categories = [
@@ -39,27 +32,15 @@ function initCategories() {
 }
 
 // Render
-function render() {
-  if (!state.income) {
-    showOnboarding();
-  } else {
-    showDashboard();
-  }
-}
+function render() { state.income ? showDashboard() : showOnboarding(); }
 
 // === ONBOARDING ===
 function showOnboarding() {
   $('onboarding').classList.remove('hidden');
   $('dashboard').classList.add('hidden');
   $('startBtn').onclick = () => {
-    const income = parseFloat($('incomeInput').value);
-    if (income > 0) {
-      state.income = income;
-      applyBudgetRules();
-      saveData();
-      render();
-      showQuote();
-    }
+    const inc = parseFloat($('incomeInput').value);
+    if (inc > 0) { state.income = inc; applyBudgetRules(); saveData(); render(); showQuote(); }
   };
 }
 
@@ -87,7 +68,7 @@ function showDashboard() {
 function renderCategorySummary() {
   const list = $('categoryList');
   list.innerHTML = '';
-  state.categories.forEach(cat => {
+  state.categories.forEach((cat, catIdx) => {
     const card = document.createElement('div');
     card.className = 'category-card';
     if (cat.spent > cat.budget) card.classList.add('over-budget');
@@ -101,9 +82,58 @@ function renderCategorySummary() {
       <div class="progress">
         <div class="progress-fill" style="width: ${catPercent}%"></div>
       </div>
+      <div class="card-actions">
+        <button class="edit-btn" data-cat="${catIdx}" title="Edit Category">
+          <svg><use href="#edit"></use></svg>
+        </button>
+        <button class="delete-btn" data-cat="${catIdx}" title="Delete Category">
+          <svg><use href="#delete"></use></svg>
+        </button>
+      </div>
     `;
     list.appendChild(card);
   });
+
+  list.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.cat);
+      editCategory(idx);
+    };
+  });
+
+  list.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.cat);
+      deleteCategory(idx);
+    };
+  });
+}
+
+function editCategory(catIdx) {
+  const cat = state.categories[catIdx];
+  if (!confirm(`Edit budget for "${cat.name}"?\nCurrent: ${formatKSh(cat.budget)}`)) return;
+
+  const newBudget = prompt(`Enter new budget for "${cat.name}":`, cat.budget);
+  if (newBudget !== null && !isNaN(newBudget) && parseFloat(newBudget) >= 0) {
+    cat.budget = Math.round(parseFloat(newBudget));
+    saveData();
+    render();
+  }
+}
+
+function deleteCategory(catIdx) {
+  const cat = state.categories[catIdx];
+  if (!confirm(`Delete category "${cat.name}"?\nThis will remove all expenses in it.`)) return;
+
+  if (cat.spent > 0) {
+    if (!confirm(`Warning: KSh ${cat.spent.toLocaleString()} spent will be lost. Continue?`)) return;
+  }
+
+  state.categories.splice(catIdx, 1);
+  saveData();
+  render();
 }
 
 function renderExpensesList() {
@@ -132,14 +162,17 @@ function renderExpensesList() {
         ${tx.note ? `<div class="expense-note">${tx.note}</div>` : ''}
       </div>
       <div class="expense-actions">
-        <button class="edit-expense" data-idx="${idx}" title="Edit">Edit</button>
-        <button class="delete-btn" data-idx="${idx}" title="Delete">Delete</button>
+        <button class="edit-expense" data-idx="${idx}" title="Edit">
+          <svg><use href="#edit"></use></svg>
+        </button>
+        <button class="delete-btn" data-idx="${idx}" title="Delete">
+          <svg><use href="#delete"></use></svg>
+        </button>
       </div>
     `;
     list.appendChild(item);
   });
 
-  // Attach event listeners
   list.querySelectorAll('.edit-expense').forEach(btn => {
     btn.onclick = () => editExpense(parseInt(btn.dataset.idx), allTx);
   });
@@ -148,10 +181,10 @@ function renderExpensesList() {
   });
 }
 
+let editingExpense = null;
 function editExpense(globalIdx, allTx) {
   const tx = allTx[globalIdx];
   if (!confirm(`Edit expense of ${formatKSh(tx.amount)} on ${tx.date}?`)) return;
-
   openAddModal(tx, globalIdx);
 }
 
@@ -170,9 +203,6 @@ function deleteExpense(globalIdx, allTx) {
     showQuote();
   }
 }
-
-// === MODAL: ADD/EDIT EXPENSE ===
-let editingExpense = null;
 
 function openAddModal(expense = null, globalIdx = null) {
   editingExpense = expense ? { ...expense, globalIdx } : null;
@@ -207,7 +237,6 @@ function openAddModal(expense = null, globalIdx = null) {
 
     if (amount > 0 && category) {
       if (editingExpense) {
-        // Remove old
         const oldCat = state.categories.find(c => c.name === editingExpense.category);
         if (oldCat) {
           oldCat.spent -= editingExpense.amount;
@@ -217,7 +246,6 @@ function openAddModal(expense = null, globalIdx = null) {
         }
       }
 
-      // Add new
       const cat = state.categories.find(c => c.name === category);
       if (cat) {
         cat.spent += amount;
@@ -252,7 +280,7 @@ function openEditModal() {
     div.style.marginBottom = '1rem';
     div.innerHTML = `
       <label style="display:block; font-size:0.9rem; color:#666;">${cat.name}</label>
-      <input type="number" data-name="${cat.name}" value="${cat.budget}" placeholder="0" style="width:100%;padding:0.8rem;border:1px solid #ddd;border-radius:8px;"/>
+      <input type="number" data-name="${cat.name}" value="${cat.budget}" placeholder="0" style="width:100%;padding:.8rem;border:1px solid #ddd;border-radius:8px;"/>
     `;
     container.appendChild(div);
   });
