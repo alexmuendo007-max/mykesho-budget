@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#006400"/>
+  <title>MyKesho Budget Tracker</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Candara:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Floating Quote -->
+    <div id="quote" class="quote hidden">
+      <p id="quoteText"></p>
+      <span id="quoteAuthor"></span>
+    </div>
+
+    <!-- Onboarding -->
+    <div id="onboarding" class="screen">
+      <div class="logo">
+        <img src="icon-192.png" alt="MyKesho" width="80">
+      </div>
+      <h1>MyKesho Budget</h1>
+      <p class="tagline">Track. Save. Grow.</p>
+      <label>Monthly Take-Home (KSh)</label>
+      <input type="number" id="incomeInput" placeholder="e.g. 35000" min="1" aria-label="Monthly income"/>
+      <button id="startBtn" class="btn-primary">
+        <span>Get Started</span>
+        <svg class="icon"><use href="#arrow-right"></use></svg>
+      </button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="screen hidden">
+      <header>
+        <h1>MyKesho</h1>
+        <div class="actions">
+          <button id="mpesaBtn" class="icon-btn" aria-label="Import M-Pesa">
+            <svg class="icon"><use href="#mpesa"></use></svg>
+          </button>
+          <button id="editBudgetBtn" class="icon-btn" aria-label="Edit Budget">
+            <svg class="icon"><use href="#edit"></use></svg>
+          </button>
+          <button id="exportPdfBtn" class="icon-btn" aria-label="Export PDF">
+            <svg class="icon"><use href="#download"></use></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="summary" class="summary-grid">
+        <div class="stat">
+          <p>Remaining</p>
+          <h2 id="remaining">KSh 0</h2>
+          <svg class="icon small"><use href="#wallet"></use></svg>
+        </div>
+        <div class="stat">
+          <p>Spent</p>
+          <h3 id="spent">KSh 0</h3>
+          <svg class="icon small"><use href="#spend"></use></svg>
+        </div>
+        <div class="stat">
+          <p>Income</p>
+          <h3 id="income">KSh 0</h3>
+          <svg class="icon small"><use href="#income"></use></svg>
+        </div>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+        <span class="progress-label" id="progressLabel">0%</span>
+      </div>
+
+      <div id="categoryList" class="category-grid"></div>
+
+      <button class="fab" id="addExpenseBtn" aria-label="Add expense">
+        <svg class="icon"><use href="#plus"></use></svg>
+      </button>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div id="addModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-content">
+        <h2>Add Expense</h2>
+        <input type="number" id="amountInput" placeholder="Amount (KSh)" min="1" aria-label="Amount"/>
+        <select id="categorySelect" aria-label="Category"></select>
+        <input type="date" id="dateInput" aria-label="Date"/>
+        <input type="text" id="noteInput" placeholder="Note (optional)" aria-label="Note"/>
+        <div class="modal-actions">
+          <button id="cancelBtn" class="btn-secondary">Cancel</button>
+          <button id="saveBtn" class="btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Budget Modal -->
+    <div id="editModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-content">
+        <h2>Edit Budget</h2>
+        <label>Monthly Income (KSh)</label>
+        <input type="number" id="editIncome" min="1"/>
+        
+        <div class="modal-body">
+          <div id="budgetInputs" class="budget-inputs"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="resetDefault" class="btn-secondary">Reset 50/30/10/10</button>
+          <button id="saveBudget" class="btn-primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- M-Pesa Import Modal -->
+    <div id="mpesaModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-content">
+        <h2>Import M-Pesa SMS</h2>
+        <p>Paste your M-Pesa SMS below:</p>
+        <textarea id="smsInput" placeholder="e.g. Confirmed. Ksh1,200.00 paid to JAVAHouse on 5/4/25"></textarea>
+        <div id="parsedPreview" class="parsed hidden">
+          <p><strong>Detected:</strong></p>
+          <p>Amount: <span id="pAmount"></span></p>
+          <p>Payee: <span id="pPayee"></span></p>
+          <p>Date: <span id="pDate"></span></p>
+          <p>Category: <span id="pCategory"></span></p>
+        </div>
+        <div class="modal-actions">
+          <button id="mpesaCancel" class="btn-secondary">Cancel</button>
+          <button id="mpesaSave" class="btn-primary hidden">Add Expense</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SVG Icons -->
+  <svg style="display:none">
+    <symbol id="arrow-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="mpesa" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="#00A651"/><path d="M8 8h8v8H8z" fill="white"/></symbol>
+    <symbol id="edit" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></symbol>
+    <symbol id="download" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"/></symbol>
+    <symbol id="wallet" viewBox="0 0 24 24"><path d="M21 18V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM7 10h10v8H7z" fill="currentColor"/></symbol>
+    <symbol id="spend" viewBox="0 0 24 24"><path d="M7 15h2v2H7zm4-8h2v10h-2zm4 4h2v6h-2z" fill="currentColor"/></symbol>
+    <symbol id="income" viewBox="0 0 24 24"><path d="M12 8l-6 6h4v6h4v-6h4l-6-6z" fill="currentColor"/></symbol>
+  </svg>
+
+  <script src="script.js"></script>
+</body>
+</html>
